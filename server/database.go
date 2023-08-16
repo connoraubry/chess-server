@@ -32,7 +32,7 @@ func NewDB() *gorm.DB {
 	if err != nil {
 		log.Fatal(err)
 	}
-	//db.AutoMigrate(&Game{})
+	db.AutoMigrate(&Game{})
 
 	return db
 }
