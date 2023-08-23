@@ -1,22 +1,34 @@
 package server
 
 import (
-	"database/sql"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
-	"log"
 	"os"
 
+	log "github.com/sirupsen/logrus"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
+/*
+	type User struct {
+		gorm.Model
+		ID    int
+		Name  string
+		Token string
+	}
+*/
 type Game struct {
 	gorm.Model
 	ID      int
 	Fen     string
 	Done    bool
 	PgnPath string
+
+	WhiteToken string
+	BlackToken string
 }
 
 var db *gorm.DB
@@ -33,64 +45,58 @@ func NewDB() *gorm.DB {
 		log.Fatal(err)
 	}
 	db.AutoMigrate(&Game{})
-
+	//db.AutoMigrate(&User{})
 	return db
 }
 
-func GetGameByID(db *sql.DB, id string) ([]Game, error) {
-	var games []Game
-	rows, err := db.Query("SELECT * FROM game WHERE id = ?", id)
-
-	if err != nil {
-		return nil, fmt.Errorf("db.GetGameByID(%v): %v", id, err)
+func genToken(length int) string {
+	b := make([]byte, length)
+	if _, err := rand.Read(b); err != nil {
+		return ""
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var g Game
-		if err := rows.Scan(&g.ID, &g.Fen, &g.Done, &g.PgnPath); err != nil {
-			return nil, fmt.Errorf("getAllGames: %v", err)
-		}
-		games = append(games, g)
-
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("getAllGames: %v", err)
-	}
-
-	return games, nil
+	return hex.EncodeToString(b)
 }
 
-func getAllGames(db *sql.DB) ([]Game, error) {
-	var games []Game
+func insertNewGame() (*Game, error) {
 
-	rows, err := db.Query("SELECT * FROM game")
-
-	if err != nil {
-		return nil, fmt.Errorf("getAllGames: %v", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var g Game
-		if err := rows.Scan(&g.ID, &g.Fen, &g.Done, &g.PgnPath); err != nil {
-			return nil, fmt.Errorf("getAllGames: %v", err)
-		}
-		games = append(games, g)
+	fen := "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+	pgnPath := "/test.pgn"
+	game := &Game{
+		Fen:        fen,
+		Done:       false,
+		PgnPath:    pgnPath,
+		WhiteToken: genToken(20),
+		BlackToken: genToken(20),
 	}
 
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("getAllGames: %v", err)
+	result := db.Create(game)
+
+	if result.Error != nil {
+		log.Error(result.Error)
+	} else {
+		log.WithFields(log.Fields{"id": game.ID}).Info("Created new game")
 	}
 
-	return games, nil
-
+	return game, result.Error
 }
 
-func insertNewGame(db *sql.DB) error {
+/*
+func InsertNewUser(username string) (string, error) {
 
-	v := "INSERT INTO game (fen, done, pgnpath) (? ? ?)"
-	_, err := db.Exec(v, "7/6/5/4", false, "/path/to/pgn")
-	return err
+	_, err := GetUserByUsername(username)
+	if err == nil {
+		return "", fmt.Errorf("Error: found existing user in database")
+	}
+
+	token := genToken(20)
+	user := &User{Name: username, Token: token}
+	result := db.Create(user)
+	return token, result.Error
 }
+
+func GetUserByUsername(username string) (User, error) {
+	var user User
+	result := db.Where("name = ?", username).First(&user)
+	return user, result.Error
+}
+*/
