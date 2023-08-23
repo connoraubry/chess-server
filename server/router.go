@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/connoraubry/chessbot-go/engine"
 	"github.com/julienschmidt/httprouter"
 	log "github.com/sirupsen/logrus"
 )
@@ -24,6 +25,7 @@ func CreateRouter() *httprouter.Router {
 	router.GET("/api/v1/test", testDB)
 	router.POST("/api/v1/create", newGame)
 	router.GET("/api/v1/game/:id", getGame)
+	router.POST("/api/v1/move", move)
 	return router
 }
 
@@ -134,4 +136,51 @@ func newGame(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		log.Fatalln(err)
 	}
 	w.Write(jsonResp)
+}
+
+func move(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	type MoveReq struct {
+		Move  string
+		ID    int
+		Token string
+	}
+	var m MoveReq
+	err := json.NewDecoder(req.Body).Decode(&m)
+	if err != nil {
+		log.Errorf("Error parsing req body into MoveReq")
+	}
+
+	log.Info(m)
+	var game = &Game{ID: m.ID}
+	res := db.First(game)
+
+	if res.Error != nil {
+		log.Errorln(res.Error)
+		log.Info("Sending bad request response")
+		http.Error(w, "Inavlid GameID Number", http.StatusBadRequest)
+		return
+	}
+
+	e := engine.NewEngine(engine.OptFenString(game.Fen))
+
+	log.Infof("Taking move %v", m.Move)
+
+	moves := e.GetStringToMoveMap(e.GetValidMoves())
+
+	move, ok := moves[m.Move]
+	if !ok {
+		log.Errorf("Move %v not found in current moves", m.Move)
+		http.Error(w, "Error with move", http.StatusBadRequest)
+		return
+	}
+
+	if !e.TakeMove(move) {
+		log.Errorf("Error taking move %v %v", m.Move, move)
+		http.Error(w, "Error with move", http.StatusBadRequest)
+		return
+	}
+	newFen := e.ExportToFEN()
+	log.WithField("fen", newFen).Info("Updating FEN")
+	db.First(&Game{ID: m.ID}).Update("fen", e.ExportToFEN())
+
 }

@@ -12,6 +12,7 @@ require (
 )
 
 require (
+	github.com/connoraubry/chessbot-go v0.0.0-20230805004706-b3e49bb40e2c // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/mattn/go-sqlite3 v1.14.17 // indirect
