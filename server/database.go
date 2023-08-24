@@ -29,6 +29,8 @@ type Game struct {
 
 	WhiteToken string
 	BlackToken string
+
+	BlackJoined bool
 }
 
 var db *gorm.DB
@@ -62,11 +64,12 @@ func insertNewGame() (*Game, error) {
 	fen := "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 	pgnPath := "/test.pgn"
 	game := &Game{
-		Fen:        fen,
-		Done:       false,
-		PgnPath:    pgnPath,
-		WhiteToken: genToken(20),
-		BlackToken: genToken(20),
+		Fen:         fen,
+		Done:        false,
+		PgnPath:     pgnPath,
+		WhiteToken:  genToken(20),
+		BlackToken:  genToken(20),
+		BlackJoined: false,
 	}
 
 	result := db.Create(game)

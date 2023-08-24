@@ -164,6 +164,12 @@ func joinGame(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		return
 	}
 
+	if game.BlackJoined {
+		log.Error("Black player already joined game")
+		http.Error(w, "Another player has already joined the game", http.StatusBadRequest)
+		return
+	}
+
 	log.WithField("id", request.ID).Info("Joining game")
 
 	type gameResponse struct {
@@ -180,6 +186,7 @@ func joinGame(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		log.Fatalln(err)
 	}
 	w.Write(jsonResp)
+	db.First(&Game{ID: game.ID}).Update("joinedBlack", true)
 }
 
 func move(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
@@ -208,6 +215,25 @@ func move(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	}
 
 	e := engine.NewEngine(engine.OptFenString(game.Fen))
+
+	playerTurn := e.CurrentGamestate().Player
+	if playerTurn == engine.WHITE {
+		if m.Token == game.WhiteToken {
+			log.Info("Provided token successfully matches white")
+		} else {
+			log.Error("Move is black, token is white")
+			http.Error(w, "Not user's turn", http.StatusBadRequest)
+			return
+		}
+	} else {
+		if m.Token == game.BlackToken {
+			log.Info("Provided token successfully matches black")
+		} else {
+			log.Error("Move is white, token is black")
+			http.Error(w, "Not user's turn", http.StatusBadRequest)
+			return
+		}
+	}
 
 	log.Infof("Taking move %v", m.Move)
 
