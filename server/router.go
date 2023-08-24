@@ -23,9 +23,11 @@ func CreateRouter() *httprouter.Router {
 	router.GET("/api/v1/", ping)
 	router.GET("/api/v1/fen/:fen", fen)
 	router.GET("/api/v1/test", testDB)
-	router.POST("/api/v1/create", newGame)
 	router.GET("/api/v1/game/:id", getGame)
+
+	router.POST("/api/v1/create", newGame)
 	router.POST("/api/v1/move", move)
+	router.POST("/api/v1/join", joinGame)
 	return router
 }
 
@@ -137,6 +139,48 @@ func newGame(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	}
 	w.Write(jsonResp)
 }
+func joinGame(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+
+	log.Info("Join game requested")
+	type joinReq struct {
+		ID int
+	}
+
+	var request joinReq
+	err := json.NewDecoder(req.Body).Decode(&request)
+	if err != nil {
+		log.Errorf("Error parsing req body into joinReq")
+		http.Error(w, "Error parsing request", http.StatusBadRequest)
+		return
+	}
+
+	var game = &Game{ID: request.ID}
+	res := db.First(game)
+
+	if res.Error != nil {
+		log.Errorln(res.Error)
+		log.Info("Sending bad request response")
+		http.Error(w, "Inavlid GameID Number", http.StatusBadRequest)
+		return
+	}
+
+	log.WithField("id", request.ID).Info("Joining game")
+
+	type gameResponse struct {
+		ID    int
+		Token string
+	}
+
+	response := gameResponse{
+		ID: game.ID, Token: game.BlackToken,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	jsonResp, err := json.Marshal(response)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	w.Write(jsonResp)
+}
 
 func move(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	type MoveReq struct {
@@ -148,6 +192,8 @@ func move(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	err := json.NewDecoder(req.Body).Decode(&m)
 	if err != nil {
 		log.Errorf("Error parsing req body into MoveReq")
+		http.Error(w, "Error parsing request", http.StatusBadRequest)
+		return
 	}
 
 	log.Info(m)
