@@ -186,7 +186,7 @@ func joinGame(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		log.Fatalln(err)
 	}
 	w.Write(jsonResp)
-	db.First(&Game{ID: game.ID}).Update("joinedBlack", true)
+	db.First(&Game{ID: game.ID}).Update("black_joined", true)
 }
 
 func move(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
