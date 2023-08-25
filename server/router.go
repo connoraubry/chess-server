@@ -185,8 +185,16 @@ func joinGame(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	if err != nil {
 		log.Fatalln(err)
 	}
+
+	game.BlackJoined = true
+	res = db.Save(&game)
+	if res.Error != nil {
+		log.Errorln(res.Error)
+		http.Error(w, "Error updating database, try again.", http.StatusBadRequest)
+		return
+	}
+
 	w.Write(jsonResp)
-	db.First(&Game{ID: game.ID}).Update("black_joined", true)
 }
 
 func move(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
@@ -253,6 +261,13 @@ func move(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	}
 	newFen := e.ExportToFEN()
 	log.WithField("fen", newFen).Info("Updating FEN")
-	db.First(&Game{ID: m.ID}).Update("fen", e.ExportToFEN())
+
+	game.Fen = newFen
+	res = db.Save(&game)
+	if res.Error != nil {
+		log.Errorln(res.Error)
+		http.Error(w, "Error updating database, try again.", http.StatusBadRequest)
+		return
+	}
 
 }
