@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"gorm.io/driver/mysql"
@@ -22,15 +23,30 @@ import (
 */
 type Game struct {
 	gorm.Model
-	ID      int
-	Fen     string
-	Done    bool
-	PgnPath string
+	ID   int
+	Fen  string
+	Done bool
+
+	MoveList string
 
 	WhiteToken string
 	BlackToken string
 
 	BlackJoined bool
+
+	IsDev bool
+}
+
+func (g *Game) GetLastMove() string {
+	var lastMove string
+	if g.MoveList != "" {
+		moves := strings.Fields(g.MoveList)
+		return moves[len(moves)-1]
+	}
+	return lastMove
+}
+func (g *Game) AddMove(move string) {
+	g.MoveList = fmt.Sprintf("%s %s", g.MoveList, move)
 }
 
 var db *gorm.DB
@@ -59,17 +75,17 @@ func genToken(length int) string {
 	return hex.EncodeToString(b)
 }
 
-func insertNewGame() (*Game, error) {
+func insertNewGame(isDev bool) (*Game, error) {
 
 	fen := "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-	pgnPath := "/test.pgn"
 	game := &Game{
 		Fen:         fen,
 		Done:        false,
-		PgnPath:     pgnPath,
+		MoveList:    "",
 		WhiteToken:  genToken(20),
 		BlackToken:  genToken(20),
 		BlackJoined: false,
+		IsDev:       isDev,
 	}
 
 	result := db.Create(game)
@@ -77,7 +93,7 @@ func insertNewGame() (*Game, error) {
 	if result.Error != nil {
 		log.Error(result.Error)
 	} else {
-		log.WithFields(log.Fields{"id": game.ID}).Info("Created new game")
+		log.WithFields(log.Fields{"id": game.ID, "isDev": isDev}).Info("Created new game")
 	}
 
 	return game, result.Error

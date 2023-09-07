@@ -91,17 +91,17 @@ func getGame(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		http.Error(w, "Inavlid GameID Number", http.StatusBadRequest)
 	} else {
 		type Response struct {
-			ID      int
-			Fen     string
-			Done    bool
-			PgnPath string
+			ID       int
+			Fen      string
+			Done     bool
+			LastMove string
 		}
 
 		resp := Response{
-			ID:      game.ID,
-			Fen:     game.Fen,
-			Done:    game.Done,
-			PgnPath: game.PgnPath,
+			ID:       game.ID,
+			Fen:      game.Fen,
+			Done:     game.Done,
+			LastMove: game.GetLastMove(),
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -116,7 +116,19 @@ func getGame(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 
 func newGame(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 
-	game, err := insertNewGame()
+	type CreateGameReq struct {
+		IsDev bool
+	}
+
+	var gr CreateGameReq
+	err := json.NewDecoder(req.Body).Decode(&gr)
+	if err != nil {
+		log.Errorf("Error parsing req body into CreateGameReq")
+		http.Error(w, "Error parsing request", http.StatusBadRequest)
+		return
+	}
+
+	game, err := insertNewGame(gr.IsDev)
 	if err != nil {
 		log.Errorf("Error creating game: %v", err)
 	}
@@ -129,9 +141,6 @@ func newGame(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	response := gameResponse{
 		ID: game.ID, Token: game.WhiteToken,
 	}
-	//response := make(map[string]interface{})
-	//response["id"] = game.ID
-	//response["token"] = game.WhiteToken
 	w.Header().Set("Content-Type", "application/json")
 	jsonResp, err := json.Marshal(response)
 	if err != nil {
@@ -224,6 +233,8 @@ func move(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 
 	e := engine.NewEngine(engine.OptFenString(game.Fen))
 
+	var CanMove bool = true
+
 	playerTurn := e.CurrentGamestate().Player
 	if playerTurn == engine.WHITE {
 		if m.Token == game.WhiteToken {
@@ -231,7 +242,7 @@ func move(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		} else {
 			log.Error("Move is black, token is white")
 			http.Error(w, "Not user's turn", http.StatusBadRequest)
-			return
+			CanMove = false
 		}
 	} else {
 		if m.Token == game.BlackToken {
@@ -239,6 +250,16 @@ func move(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		} else {
 			log.Error("Move is white, token is black")
 			http.Error(w, "Not user's turn", http.StatusBadRequest)
+			CanMove = false
+		}
+	}
+
+	//Only return if
+	if !CanMove {
+		if game.IsDev {
+			log.Error("Overriding game move because game is set to dev flag")
+		} else {
+			log.Error("Player is not allowed to make a move, returning")
 			return
 		}
 	}
@@ -263,6 +284,7 @@ func move(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	log.WithField("fen", newFen).Info("Updating FEN")
 
 	game.Fen = newFen
+	game.AddMove(m.Move)
 	res = db.Save(&game)
 	if res.Error != nil {
 		log.Errorln(res.Error)
